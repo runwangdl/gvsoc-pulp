@@ -24,7 +24,7 @@ from interco.router import Router
 from pulp.mchan.mchan_v7 import Mchan
 from pulp.timer.timer_v2 import Timer
 from pulp.cluster.cluster_control_v2 import Cluster_control
-from pulp.neureka.neureka import Neureka
+from pulp.chips.siracusa.light_redmule import LightRedmule
 from pulp.icache_ctrl.icache_ctrl_v2 import Icache_ctrl
 
 
@@ -75,7 +75,6 @@ class Cluster(st.Component):
         self.cluster_offset = cluster_size * cid
         self.cluster_base   = self.get_property('mapping/base', int)
         self.cluster_alias  = self.get_property('alias', int)
-        neureka_irq            = self.get_property('pe/irq').index('acc_0')
         dma_irq_0           = self.get_property('pe/irq').index('dma_0')
         dma_irq_1           = self.get_property('pe/irq').index('dma_1')
         dma_irq_ext         = self.get_property('pe/irq').index('dma_ext')
@@ -120,8 +119,17 @@ class Cluster(st.Component):
         # Cluster control
         cluster_control = Cluster_control(self, 'cluster_ctrl', nb_core=nb_pe)
 
-        # NEUREKA
-        neureka = Neureka(self, 'neureka')
+        # Redmule
+        redmule = LightRedmule(
+            self,
+            f'redmule',
+            tcdm_bank_width=4,
+            tcdm_bank_number=16,
+            elem_size=4,          
+            ce_height=4,
+            ce_width=12,
+            ce_pipe=3
+        )
 
         # Icache controller
         icache_ctrl = Icache_ctrl(self, 'icache_ctrl')
@@ -130,9 +138,13 @@ class Cluster(st.Component):
         wmem = Wmem_subsystem(self, 'wmem', self)
     
 
-        #
-        # Bindings
-        #
+        # Redmule
+        redmule_reg_base        = 0x10201000
+        redmule_reg_size        = 0x00000200
+        periph_ico.add_mapping('redmule', base=redmule_reg_base, size=redmule_reg_size) 
+        self.bind(periph_ico, 'redmule', redmule, 'input')
+        self.bind(redmule, 'tcdm', l1, 'neureka_in')
+
 
         # L1 subsystem
         for i in range(0, nb_pe):
@@ -143,8 +155,8 @@ class Cluster(st.Component):
 
         self.bind(l1, 'cluster_ico', cluster_ico, 'input')
 
-        # Wmem
-        self.bind(neureka, 'wmem_out', wmem, 'input')
+        # # Wmem
+        # self.bind(neureka, 'wmem_out', wmem, 'input')
 
         # Cores
         for i in range(0, nb_pe):
@@ -209,8 +221,8 @@ class Cluster(st.Component):
         periph_ico.add_mapping('dma', **self._reloc_mapping(self.get_property('peripherals/dma/mapping')))
         self.bind(periph_ico, 'dma', mchan, 'in_%d' % nb_pe)
 
-        periph_ico.add_mapping('neureka', **self._reloc_mapping(self.get_property('peripherals/neureka/mapping')))
-        self.bind(periph_ico, 'neureka', neureka, 'input')
+        # periph_ico.add_mapping('neureka', **self._reloc_mapping(self.get_property('peripherals/neureka/mapping')))
+        # self.bind(periph_ico, 'neureka', neureka, 'input')
 
         # MCHAN
         self.bind(mchan, 'ext_irq_itf', self, 'dma_irq')
@@ -238,10 +250,10 @@ class Cluster(st.Component):
             self.bind(pes[i], 'halt_status', cluster_control, 'core_halt_%d' % i)
 
         # NEUREKA
-        for i in range(0, nb_pe):
-            self.bind(neureka, 'irq', event_unit, 'in_event_%d_pe_%d' % (neureka_irq, i))
+        # for i in range(0, nb_pe):
+        #     self.bind(neureka, 'irq', event_unit, 'in_event_%d_pe_%d' % (neureka_irq, i))
 
-        self.bind(neureka, 'out', l1, 'neureka_in')
+        # self.bind(neureka, 'out', l1, 'neureka_in')
 
         # Icache controller
         self.bind(icache_ctrl, 'enable', icache, 'enable')

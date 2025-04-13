@@ -153,7 +153,7 @@
             }
         },
 
-        "neureka": {
+        "redmule": {
             "mapping": {
                 "base": "0x10201000",
                 "size": "0x00000400",
