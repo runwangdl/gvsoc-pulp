@@ -974,9 +974,40 @@ vp::IoReqStatus LightRedmule::req(vp::Block *__this, vp::IoReq *req)
     return vp::IO_REQ_OK;
 }
 
+// Corrected function for single-word requests
 vp::IoReqStatus LightRedmule::send_tcdm_req()
 {
-    return this->tcdm_itf.req(this->tcdm_req);
+    uint32_t total_size = this->tcdm_req->get_size();
+    uint32_t addr = this->tcdm_req->get_addr();
+    bool is_write = this->tcdm_req->get_is_write();
+    uint8_t* data = this->tcdm_req->get_data();
+    vp::IoReqStatus overall_status = vp::IO_REQ_OK;
+    
+    uint32_t word_size = this->tcdm_bank_width;
+    
+    for (uint32_t offset = 0; offset < total_size; offset += word_size) {
+        uint32_t current_size = std::min(word_size, total_size - offset);
+        
+        vp::IoReq* single_req = this->tcdm_itf.req_new(addr + offset, data + offset, current_size, is_write);
+        
+        vp::IoReqStatus status = this->tcdm_itf.req(single_req);
+        
+        if (status != vp::IO_REQ_OK) {
+            overall_status = status;
+            break;
+        }
+        
+        if (offset + current_size >= total_size) {
+            this->tcdm_req->set_latency(single_req->get_latency());
+        }
+        
+        this->tcdm_itf.req_del(single_req);
+    }
+    
+    this->trace.msg(vp::Trace::LEVEL_TRACE, "[LightRedmule] Sent %d single-word requests for a total of %d bytes\n", 
+                   (total_size + word_size - 1) / word_size, total_size);
+    
+    return overall_status;
 }
 
 void LightRedmule::fsm_handler(vp::Block *__this, vp::ClockEvent *event)
